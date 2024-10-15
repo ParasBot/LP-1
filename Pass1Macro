@@ -1,0 +1,156 @@
+To implement **Pass-I** of a two-pass macroprocessor, we need to design the suitable data structures to store macro definitions and the macro name table (MNT), along with handling the macro definition table (MDT).
+
+### Objective:
+- During **Pass-I**, the macro processor will:
+  - Identify the macro definitions.
+  - Store the macro names and their details in the **MNT** (Macro Name Table).
+  - Store the macro definitions in the **MDT** (Macro Definition Table).
+  - Generate an intermediate file that excludes macro definitions and expands only calls (but without processing the actual macro).
+
+### Required Data Structures:
+1. **MNT (Macro Name Table)**: Stores the macro name, the index of the MDT where the macro definition starts, and the number of parameters.
+2. **MDT (Macro Definition Table)**: Stores the actual definition of each macro line-by-line.
+3. **PNT (Parameter Name Table)**: Stores the parameters of the macros.
+4. **Intermediate File**: Stores the source code without macro definitions.
+
+### Input:
+```
+START
+MACRO
+INCR &ARG3 &ARG2
+ADD AREG &ARG1
+MOVER BREG &ARG1
+MEND
+MACRO
+PVG &ARG2 &ARG1
+SUB AREG &ARG2
+MOVER CREG &ARG1
+MEND
+INCR
+DECR
+DATA2
+END
+```
+
+### Output:
+For **Pass-I**, we generate:
+- **MNT (Macro Name Table)**: Stores macro name, number of parameters, and starting index in MDT.
+- **MDT (Macro Definition Table)**: Stores the macro definitions line-by-line.
+- **Intermediate File**: Excludes macro definitions and expands macro calls.
+
+### Steps:
+1. Identify macros (`MACRO` to `MEND`).
+2. Store macro names and definitions in MNT and MDT, respectively.
+3. Copy all other lines (non-macro) into the intermediate file.
+
+### Expected Output (Pass-I):
+#### MNT (Macro Name Table):
+| Macro Name | Num Params | MDT Index |
+|------------|------------|-----------|
+| INCR       | 3          | 0         |
+| PVG        | 2          | 3         |
+
+#### MDT (Macro Definition Table):
+| MDT Index | Macro Line                  |
+|-----------|-----------------------------|
+| 0         | INCR &ARG3 &ARG2            |
+| 1         | ADD AREG &ARG1              |
+| 2         | MOVER BREG &ARG1            |
+| 3         | PVG &ARG2 &ARG1             |
+| 4         | SUB AREG &ARG2              |
+| 5         | MOVER CREG &ARG1            |
+
+#### Intermediate File (without macro definitions):
+```
+START
+INCR
+DECR
+DATA2
+END
+```
+
+### Implementation Code (Java):
+
+```java
+import java.io.*;
+import java.util.*;
+
+public class Pass1MacroProcessor {
+    static class MNTEntry {
+        String name;
+        int numParams;
+        int mdtIndex;
+
+        MNTEntry(String name, int numParams, int mdtIndex) {
+            this.name = name;
+            this.numParams = numParams;
+            this.mdtIndex = mdtIndex;
+        }
+    }
+
+    // Function to process input and generate MNT, MDT, and intermediate file
+    public static void processPass1(String inputFile, String mntFile, String mdtFile, String intermediateFile) throws IOException {
+        BufferedReader reader = new BufferedReader(new FileReader(inputFile));
+        BufferedWriter mntWriter = new BufferedWriter(new FileWriter(mntFile));
+        BufferedWriter mdtWriter = new BufferedWriter(new FileWriter(mdtFile));
+        BufferedWriter intermediateWriter = new BufferedWriter(new FileWriter(intermediateFile));
+
+        List<String> mdt = new ArrayList<>();
+        Map<String, MNTEntry> mnt = new LinkedHashMap<>();
+        boolean inMacroDefinition = false;
+        String macroName = null;
+        int mdtIndex = 0;
+        int numParams = 0;
+
+        String line;
+        while ((line = reader.readLine()) != null) {
+            String[] parts = line.split("\\s+");
+
+            if (parts[0].equals("MACRO")) {
+                inMacroDefinition = true;
+            } else if (parts[0].equals("MEND")) {
+                // End macro definition
+                inMacroDefinition = false;
+                mnt.put(macroName, new MNTEntry(macroName, numParams, mdtIndex));
+                mntWriter.write(macroName + " " + numParams + " " + mdtIndex + "\n");
+                mdtIndex = mdt.size();
+            } else if (inMacroDefinition) {
+                // Inside macro definition
+                if (macroName == null) {
+                    // Define the macro name and count parameters
+                    macroName = parts[0];
+                    numParams = parts.length - 1;
+                }
+                mdt.add(line);
+                mdtWriter.write(line + "\n");
+            } else {
+                // Non-macro line, write to intermediate file
+                intermediateWriter.write(line + "\n");
+            }
+        }
+
+        reader.close();
+        mntWriter.close();
+        mdtWriter.close();
+        intermediateWriter.close();
+    }
+
+    public static void main(String[] args) throws IOException {
+        String inputFile = "Input.txt";
+        String mntFile = "Mnt.txt";
+        String mdtFile = "Mdt.txt";
+        String intermediateFile = "Intermediate.txt";
+
+        processPass1(inputFile, mntFile, mdtFile, intermediateFile);
+
+        System.out.println("Pass-I macro processing completed. Check 'Mnt.txt', 'Mdt.txt', and 'Intermediate.txt'.");
+    }
+}
+```
+
+### Explanation:
+1. **MNT (Macro Name Table)** is written to `Mnt.txt`, listing macro names, number of parameters, and their starting index in the **MDT**.
+2. **MDT (Macro Definition Table)** is written to `Mdt.txt`, storing the macro lines with `MEND` marking the end.
+3. **Intermediate File** (`Intermediate.txt`) stores the source code excluding the macro definitions.
+
+This code will generate the intermediate file and the MNT/MDT necessary for Pass-I of a two-pass macro processor.
