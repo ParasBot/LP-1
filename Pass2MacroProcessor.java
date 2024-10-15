@@ -2,6 +2,7 @@ import java.io.*;
 import java.util.*;
 
 public class Pass2MacroProcessor {
+
     static class MNTEntry {
         String name;
         int mdtIndex;
@@ -59,7 +60,8 @@ public class Pass2MacroProcessor {
                 MNTEntry entry = mnt.get(macroName);
                 String[] actualParams = parts[1].split(",");
 
-                expandMacro(entry, actualParams, writer, mdt);
+                Map<String, String> argMap = createArgMap(actualParams);
+                expandMacro(entry, argMap, writer, mdt);
             } else {
                 // Write non-macro lines as is
                 writer.write(line);
@@ -70,16 +72,38 @@ public class Pass2MacroProcessor {
         writer.close();
     }
 
+    // Helper function to create a map for arguments (both positional and keyword)
+    public static Map<String, String> createArgMap(String[] actualParams) {
+        Map<String, String> argMap = new HashMap<>();
+        int posCounter = 1;
+
+        for (String param : actualParams) {
+            if (param.contains("=")) {
+                // Keyword argument
+                String[] keyValue = param.split("=");
+                argMap.put("&" + keyValue[0], keyValue[1]);
+            } else {
+                // Positional argument
+                argMap.put("#" + posCounter, param);
+                posCounter++;
+            }
+        }
+
+        return argMap;
+    }
+
     // Function to expand macros by replacing formal parameters with actual parameters
-    public static void expandMacro(MNTEntry entry, String[] actualParams, BufferedWriter writer, List<String> mdt) throws IOException {
+    public static void expandMacro(MNTEntry entry, Map<String, String> argMap, BufferedWriter writer, List<String> mdt) throws IOException {
         int index = entry.mdtIndex;
+
         while (!mdt.get(index).equals("MEND")) {
             String mdtLine = mdt.get(index);
 
-            // Replace formal parameters (#1, #2, etc.) with actual parameters
-            for (int i = 0; i < entry.numParams; i++) {
-                mdtLine = mdtLine.replace("#" + (i + 1), actualParams[i]);
+            // Replace formal parameters with actual parameters
+            for (Map.Entry<String, String> arg : argMap.entrySet()) {
+                mdtLine = mdtLine.replace(arg.getKey(), arg.getValue());
             }
+
             writer.write(mdtLine);
             writer.newLine();
             index++;
